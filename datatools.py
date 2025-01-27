@@ -1,5 +1,9 @@
 
 ### Using HF datasets to create dataloaders instead of torchtext :))
+### Also implemented a simple tokenizer for word level tokenization.
+### This mostly matches the starter code.
+
+
 from datasets import load_dataset
 import torch
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
@@ -20,11 +24,11 @@ def preprocess_text(text):
 # collate function for logistic regression: pad the text with 0s
 def collate_fn_for_logistic_regression(batch):
     text = [item['text'] for item in batch]
-    label = torch.stack([item['label'] for item in batch], dim=0)
+    label = torch.stack([item['label'] for item in batch], dim=0).float()
     text = pad_sequence(text, batch_first=True, padding_value=0)
     
     # padding mask
-    padding_mask = (text == 0).to(torch.float)
+    padding_mask = (text == 0).to(torch.int64)
     return {"text": text, "label": label, "padding_mask": padding_mask}
 
 
@@ -36,12 +40,26 @@ def collate_fn_for_rnn(batch):
 
 
 class Tokenizer:
-    def __init__(self, dataset):
+    """
+    Minimalistic tokenizer for word level tokenization
+    """
+    def __init__(self, dataset, max_vocab_size=10000):
+        # Initialize with special tokens at fixed positions
         self.vocab = {'<pad>': 0, '<unk>': 1}
-        for text in tqdm(dataset['text'], desc="Building vocabulary"):
+        word_freq = {}
+        
+        # count word frequencies
+        for text in tqdm(dataset['text'], desc="Counting word frequencies"):
             for token in text:
-                if token not in self.vocab:
-                    self.vocab[token] = len(self.vocab)
+                word_freq[token] = word_freq.get(token, 0) + 1
+                
+        # sort by frequency and take top max_vocab_size
+        sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+        top_words = sorted_words[:max_vocab_size]
+        
+        # build vocab starting from index 2 to preserve special token positions
+        for word, _ in top_words:
+            self.vocab[word] = len(self.vocab)
     
     def encode(self, text):
         return [self.vocab.get(token, self.vocab['<unk>']) for token in text]
@@ -104,8 +122,7 @@ if __name__ == "__main__":
     print(next(iter(train_loader)))
     print(next(iter(test_loader)))
     
-    
-    
+
 class Accuracy:
     def __init__(self):
         self.correct = 0
