@@ -4,6 +4,7 @@
 ### This mostly matches the starter code.
 
 
+import os
 from datasets import load_dataset
 import torch
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
@@ -11,6 +12,8 @@ from torch.utils.data import DataLoader
 import spacy
 from tqdm import tqdm
 
+# Global seed for reproducibility
+SEED = 42
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -77,29 +80,48 @@ class Tokenizer:
         return len(self.vocab)
 
 
-def create_dataloaders(batch_size, model_type):
-    # Load the IMDB dataset
-    imdb_dataset = load_dataset("stanfordnlp/imdb")
-    print("Number of training samples: ", len(imdb_dataset['train']))
-    print("Number of test samples: ", len(imdb_dataset['test']))
+def create_dataloaders(batch_size, model_type, max_vocab_size=10000):
+    # Create generator with fixed seed for reproducibility
+    generator = torch.Generator()
+    generator.manual_seed(SEED)
     
-    # Remove the unsupervised split since we only need train and test
-    imdb_dataset.pop('unsupervised')
+    # Check if processed dataset exists
+    dataset_path = f'processed_dataset_{max_vocab_size}.pt'
+    tokenizer_path = f'tokenizer_{max_vocab_size}.pt'
+    
+    if os.path.exists(dataset_path) and os.path.exists(tokenizer_path):
+        print("Loading preprocessed dataset and tokenizer...")
+        dataset = torch.load(dataset_path)
+        tokenizer = torch.load(tokenizer_path)
+    else:
+        print("Processing dataset from scratch...")
+        # Load the IMDB dataset
+        imdb_dataset = load_dataset("stanfordnlp/imdb")
+        print("Number of training samples: ", len(imdb_dataset['train']))
+        print("Number of test samples: ", len(imdb_dataset['test']))
+        
+        # Remove the unsupervised split since we only need train and test
+        imdb_dataset.pop('unsupervised')
 
-    # Preprocess the text using spacy
-    dataset = imdb_dataset.map(preprocess_text, batched=True, batch_size=50, num_proc=15)
-    
-    # build the vocab
-    tokenizer = Tokenizer(dataset['train'])
-    
-    # Encode the dataset
-    dataset = dataset.map(lambda x: {'text': tokenizer.encode_batch(x['text']), 'label': x['label']}, batched=True, batch_size=50, num_proc=15)
-    dataset.set_format(type='torch', columns=['text', 'label'])
-    
-    # create validation set
-    dataset['train'] = dataset['train'].shuffle(seed=42)
-    dataset['val'] = dataset['train'].select(range(7500))
-    dataset['train'] = dataset['train'].select(range(7500, len(dataset['train'])))
+        # Preprocess the text using spacy
+        dataset = imdb_dataset.map(preprocess_text, batched=True, batch_size=50, num_proc=15)
+        
+        # build the vocab
+        tokenizer = Tokenizer(dataset['train'], max_vocab_size=max_vocab_size)
+        
+        # Encode the dataset
+        dataset = dataset.map(lambda x: {'text': tokenizer.encode_batch(x['text']), 'label': x['label']}, batched=True, batch_size=50, num_proc=15)
+        dataset.set_format(type='torch', columns=['text', 'label'])
+        
+        # create validation set
+        dataset['train'] = dataset['train'].shuffle(seed=SEED)
+        dataset['val'] = dataset['train'].select(range(7500))
+        dataset['train'] = dataset['train'].select(range(7500, len(dataset['train'])))
+        
+        # Save processed dataset and tokenizer
+        print("Saving preprocessed dataset and tokenizer...")
+        torch.save(dataset, dataset_path)
+        torch.save(tokenizer, tokenizer_path)
     
     # Create dataloaders
     if model_type == 'logistic_regression':
@@ -109,7 +131,7 @@ def create_dataloaders(batch_size, model_type):
     else:
         raise ValueError(f"Invalid model type: {model_type}")
     
-    train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_fn, generator=generator)
     val_loader = DataLoader(dataset['val'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     test_loader = DataLoader(dataset['test'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     # Return the dataloaders
