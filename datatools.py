@@ -22,7 +22,10 @@ def collate_fn_for_logistic_regression(batch):
     text = [item['text'] for item in batch]
     label = torch.stack([item['label'] for item in batch], dim=0)
     text = pad_sequence(text, batch_first=True, padding_value=0)
-    return {"text": text, "label": label}
+    
+    # padding mask
+    padding_mask = (text == 0).to(torch.float)
+    return {"text": text, "label": label, "padding_mask": padding_mask}
 
 
 def collate_fn_for_rnn(batch):
@@ -100,3 +103,21 @@ if __name__ == "__main__":
     tokenizer, train_loader, val_loader, test_loader = create_dataloaders(batch_size=32, model_type='logistic_regression')
     print(next(iter(train_loader)))
     print(next(iter(test_loader)))
+    
+    
+    
+class Accuracy:
+    def __init__(self):
+        self.correct = 0
+        self.total = 0
+    
+    def update(self, pred, target):
+        self.correct += (pred == target).sum().item()
+        self.total += len(target)
+    
+    def compute(self):
+        return self.correct / self.total
+    
+    def reset(self):
+        self.correct = 0
+        self.total = 0
