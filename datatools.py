@@ -138,13 +138,7 @@ def create_dataloaders(batch_size, model_type, max_vocab_size=10000):
     return tokenizer, train_loader, val_loader, test_loader
 
 
-
-if __name__ == "__main__":
-    tokenizer, train_loader, val_loader, test_loader = create_dataloaders(batch_size=32, model_type='logistic_regression')
-    print(next(iter(train_loader)))
-    print(next(iter(test_loader)))
-    
-
+# simple accuracy metric class
 class Accuracy:
     def __init__(self):
         self.correct = 0
@@ -160,3 +154,10 @@ class Accuracy:
     def reset(self):
         self.correct = 0
         self.total = 0
+
+
+
+if __name__ == "__main__":
+    tokenizer, train_loader, val_loader, test_loader = create_dataloaders(batch_size=32, model_type='logistic_regression')
+    print(next(iter(train_loader)))
+    print(next(iter(test_loader)))
