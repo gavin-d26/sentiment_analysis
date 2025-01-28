@@ -35,13 +35,15 @@ class LogisticRegression(nn.Module):
         return x
 
 
-def train_logistic_regression(model, train_loader, val_loader, epochs, lr):
+def train_logistic_regression(model, train_loader, val_loader, epochs, lr, initial_state_dict=None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     optimizer = Adam(model.parameters(), lr=lr)
     criterion = nn.BCEWithLogitsLoss()
     train_acc = Accuracy()
     val_acc = Accuracy()
     model.to(device)
+    if initial_state_dict is not None:
+        model.load_state_dict(initial_state_dict)
     for epoch in range(epochs):
         train_loss = 0
         train_acc.reset()
@@ -87,7 +89,10 @@ def evaluate_logistic_regression(model, test_loader):
     return test_acc.compute()
 
 
-def test_model_correctness(model, single_loader, batch_loader, num_instances=64):
+def test_model_correctness(model, num_instances=64, model_type='logistic_regression'):
+    # Create dataloaders for testing
+    _, single_loader, _, _ = create_dataloaders(batch_size=1, model_type=model_type)
+    _, batch_loader, _, _ = create_dataloaders(batch_size=64, model_type=model_type)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
@@ -147,12 +152,20 @@ if __name__ == "__main__":
     )
     
     model = LogisticRegression(len(tokenizer.vocab), 100, 1)
+    initial_state_dict = model.state_dict()
     
     # Test model correctness before training
     print("\nTesting model correctness before training:")
-    test_model_correctness(model, train_loader1, train_loader64, num_instances=64)
+    test_model_correctness(model, num_instances=64, model_type='logistic_regression')
     
-
+    # Train the model
+    model = train_logistic_regression(model, train_loader64, val_loader64, epochs=2, lr=0.001, initial_state_dict=initial_state_dict)
+    
+    # Test model correctness after training
+    print("\nTesting model correctness after training:")
+    test_model_correctness(model, num_instances=64, model_type='logistic_regression')
+    
+    
     
     
     
