@@ -50,13 +50,13 @@ def train_model(model, train_loader, val_loader, epochs, lr, initial_state_dict=
     model.to(device)
     if initial_state_dict is not None:
         model.load_state_dict(initial_state_dict)
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc="Training epochs"):
         train_loss = 0
         train_acc.reset()
         val_loss = 0
         val_acc.reset()
         model.train()
-        for batch in train_loader:
+        for batch in tqdm(train_loader, desc="Training batches"):
             for key in batch:
                 batch[key] = batch[key].to(device)
             optimizer.zero_grad()
@@ -69,7 +69,7 @@ def train_model(model, train_loader, val_loader, epochs, lr, initial_state_dict=
         
         model.eval()
         with torch.no_grad():
-            for batch in val_loader:
+            for batch in tqdm(val_loader, desc="Validation batches"):
                 for key in batch:
                     batch[key] = batch[key].to(device)
                 output = model(batch['text'], padding_mask=batch['padding_mask'])
@@ -77,6 +77,7 @@ def train_model(model, train_loader, val_loader, epochs, lr, initial_state_dict=
                 val_loss += loss.item()
                 val_acc.update((output > 0).float(), batch['label'])
         print(f"Epoch {epoch+1} train loss: {train_loss/len(train_loader):.2f}, train acc: {train_acc.compute():.2f}, val loss: {val_loss/len(val_loader):.2f}, val acc: {val_acc.compute():.2f}")
+        print()
     
     return model
 
@@ -88,7 +89,7 @@ def evaluate_model(model, test_loader):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     with torch.no_grad():
-        for batch in test_loader:
+        for batch in tqdm(test_loader, desc="Testing batches"):
             for key in batch:
                 batch[key] = batch[key].to(device)
             output = model(batch['text'], padding_mask=batch['padding_mask'])
