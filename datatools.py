@@ -25,7 +25,7 @@ def preprocess_text(text):
 
 
 # collate function for logistic regression: pad the text with 0s
-def collate_fn_for_logistic_regression(batch):
+def collate_fn(batch):
     text = [item['text'] for item in batch]
     label = torch.stack([item['label'] for item in batch], dim=0).float()
     text = pad_sequence(text, batch_first=True, padding_value=0)
@@ -33,13 +33,6 @@ def collate_fn_for_logistic_regression(batch):
     # padding mask
     padding_mask = (text == 0).to(torch.int64)
     return {"text": text, "label": label, "padding_mask": padding_mask}
-
-
-def collate_fn_for_rnn(batch):
-    text = [item['text'] for item in batch]
-    label = [item['label'] for item in batch]
-    text = pad_sequence(text, batch_first=True, padding_value=0)
-    return text, label
 
 
 class Tokenizer:
@@ -123,13 +116,6 @@ def create_dataloaders(batch_size, model_type, max_vocab_size=10000):
         torch.save(dataset, dataset_path)
         torch.save(tokenizer, tokenizer_path)
     
-    # Create dataloaders
-    if model_type == 'logistic_regression':
-        collate_fn = collate_fn_for_logistic_regression
-    elif model_type == 'rnn':
-        collate_fn = collate_fn_for_rnn
-    else:
-        raise ValueError(f"Invalid model type: {model_type}")
     
     train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_fn, generator=generator)
     val_loader = DataLoader(dataset['val'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
