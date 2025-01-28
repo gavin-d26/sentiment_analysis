@@ -40,7 +40,7 @@ class LogisticRegression(nn.Module):
         return x
 
 
-def train_model(model, train_loader, val_loader, epochs, lr, initial_state_dict=None):
+def train_model(model, train_loader, val_loader, epochs, lr):
     """Train the model"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     optimizer = Adam(model.parameters(), lr=lr)
@@ -48,8 +48,6 @@ def train_model(model, train_loader, val_loader, epochs, lr, initial_state_dict=
     train_acc = Accuracy()
     val_acc = Accuracy()
     model.to(device)
-    if initial_state_dict is not None:
-        model.load_state_dict(initial_state_dict)
     for epoch in tqdm(range(epochs), desc="Training epochs"):
         train_loss = 0
         train_acc.reset()
@@ -97,11 +95,11 @@ def evaluate_model(model, test_loader):
     return test_acc.compute()
 
 
-def test_model_correctness(model, num_instances=64, model_type='logistic_regression'):
+def test_model_correctness(model, num_instances=64):
     """Test model correctness by comparing single-instance and minibatch losses"""
     # Create dataloaders for testing
-    _, single_loader, _, _ = create_dataloaders(batch_size=1, model_type=model_type)
-    _, batch_loader, _, _ = create_dataloaders(batch_size=64, model_type=model_type)
+    _, single_loader, _, _ = create_dataloaders(batch_size=1)
+    _, batch_loader, _, _ = create_dataloaders(batch_size=64)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
@@ -146,7 +144,7 @@ def test_model_correctness(model, num_instances=64, model_type='logistic_regress
     print(f"Max absolute difference: {max(abs(s-b) for s,b in zip(single_losses, batch_losses)):.6f}")
 
 
-def run_batch_size_experiment(model, tokenizer, batch_sizes=[1, 16, 32, 64, 128], epochs=2, lr=0.001):
+def run_batch_size_experiment(model, tokenizer, batch_sizes=[16, 32, 64, 128], epochs=2, lr=0.001):
     """Run experiments with different batch sizes and measure training time and accuracy"""
     results = []
     initial_state = model.state_dict()
@@ -156,13 +154,15 @@ def run_batch_size_experiment(model, tokenizer, batch_sizes=[1, 16, 32, 64, 128]
         
         # Create dataloaders
         _, train_loader, val_loader, test_loader = create_dataloaders(
-            batch_size=batch_size,
-            model_type='logistic_regression'
+            batch_size=batch_size
         )
+        
+        # Reset model to initial weights
+        model.load_state_dict(initial_state)
         
         # Time the training
         start_time = time.time()
-        model = train_model(model, train_loader, val_loader, epochs=epochs, lr=lr, initial_state_dict=initial_state)
+        model = train_model(model, train_loader, val_loader, epochs=epochs, lr=lr)
         training_time = time.time() - start_time
         
         # Get final validation accuracy
@@ -189,9 +189,11 @@ def run_learning_rate_experiment(model, tokenizer, batch_size=64, learning_rates
         
         # Create dataloaders
         _, train_loader, val_loader, test_loader = create_dataloaders(
-            batch_size=batch_size,
-            model_type='logistic_regression'
+            batch_size=batch_size
         )
+        
+        # Reset model to initial weights
+        model.load_state_dict(initial_state)
         
         # Train model
         model = train_model(model, train_loader, val_loader, epochs=epochs, lr=lr)
@@ -255,17 +257,17 @@ def analyze_model_outputs(model, loader, tokenizer, num_examples=10):
         if pred != label:  # Focus on errors
             print(f"{text[:50]}... | {pred:.0f} | {label:.0f}")
 
-def save_experiment_results(batch_results, lr_results):
+def save_experiment_results(batch_results, lr_results, model_name):
     """Save experiment results to files"""
     import json
     
-    with open('batch_size_results.json', 'w') as f:
+    with open(f'{model_name}_batch_size_results.json', 'w') as f:
         json.dump(batch_results, f, indent=2)
     
-    with open('learning_rate_results.json', 'w') as f:
+    with open(f'{model_name}_learning_rate_results.json', 'w') as f:
         json.dump(lr_results, f, indent=2)
 
-def visualize_results(batch_results, lr_results):
+def visualize_results(batch_results, lr_results, model_name):
     """Visualize experiment results using matplotlib"""
     # Batch size results
     plt.figure(figsize=(12, 5))
@@ -287,7 +289,7 @@ def visualize_results(batch_results, lr_results):
     plt.title('Accuracy vs Batch Size')
     
     plt.tight_layout()
-    plt.savefig('batch_size_results.png')
+    plt.savefig(f'{model_name}_batch_size_results.png')
     plt.close()
     
     # Learning rate results
@@ -299,7 +301,7 @@ def visualize_results(batch_results, lr_results):
     plt.ylabel('Validation Accuracy')
     plt.title('Accuracy vs Learning Rate')
     plt.tight_layout()
-    plt.savefig('learning_rate_results.png')
+    plt.savefig(f'{model_name}_learning_rate_results.png')
     plt.close()
 
 if __name__ == "__main__":
@@ -307,20 +309,18 @@ if __name__ == "__main__":
     
     # Create dataloaders and model for initial correctness testing
     tokenizer, train_loader1, val_loader1, test_loader1 = create_dataloaders(
-        batch_size=1,
-        model_type='logistic_regression'
+        batch_size=1
     )
     
     tokenizer, train_loader64, val_loader64, test_loader64 = create_dataloaders(
-        batch_size=64,
-        model_type='logistic_regression'
+        batch_size=64
     )
     
     model = LogisticRegression(len(tokenizer.vocab), 100, 1)
     
     # Test model correctness before training
     print("\nTesting model correctness before training:")
-    test_model_correctness(model, num_instances=64, model_type='logistic_regression')
+    test_model_correctness(model, num_instances=64)
     
     # Run batch size experiments
     print("\nRunning batch size experiments...")
@@ -331,10 +331,10 @@ if __name__ == "__main__":
     lr_results = run_learning_rate_experiment(model, tokenizer)
     
     # Save experiment results
-    save_experiment_results(batch_results, lr_results)
+    save_experiment_results(batch_results, lr_results, model_name='logistic_regression')
     
     # Visualize results
-    visualize_results(batch_results, lr_results)
+    visualize_results(batch_results, lr_results, model_name='logistic_regression')
     
     # Train final model with best hyperparameters
     print("\nTraining final model with best hyperparameters...")

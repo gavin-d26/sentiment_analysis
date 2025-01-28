@@ -12,8 +12,8 @@ from tqdm import tqdm
 from logistic_regression import (
     train_model,
     evaluate_model,
-    run_batch_size_experiment as run_batch_experiment,
-    run_learning_rate_experiment as run_lr_experiment,
+    run_batch_size_experiment,
+    run_learning_rate_experiment,
     test_model_correctness,
     analyze_model_outputs,
     save_experiment_results,
@@ -88,72 +88,6 @@ class LSTM(nn.Module):
         dropped = self.dropout(avg_pooled)
         return self.fc(dropped).squeeze(-1)
 
-def run_batch_size_experiment(model, tokenizer, batch_sizes=[16, 32, 64, 128], epochs=2, lr=0.001):
-    """Run experiments with different batch sizes and measure training time and accuracy"""
-    results = []
-    initial_state = model.state_dict()
-    
-    for batch_size in tqdm(batch_sizes, desc="Batch size experiments"):
-        print(f"\nRunning experiment with batch_size={batch_size}")
-        
-        # Create dataloaders
-        _, train_loader, val_loader, test_loader = create_dataloaders(
-            batch_size=batch_size,
-            model_type='lstm'  # Changed to lstm
-        )
-        
-        # Reset model to initial weights
-        model.load_state_dict(initial_state)
-        
-        # Time the training
-        start_time = time.time()
-        model = train_model(model, train_loader, val_loader, epochs=epochs, lr=lr)
-        training_time = time.time() - start_time
-        
-        # Get final validation accuracy
-        val_acc = evaluate_model(model, val_loader)
-        
-        results.append({
-            'batch_size': batch_size,
-            'training_time': training_time,
-            'val_accuracy': val_acc
-        })
-        
-        print(f"Batch size {batch_size}: Training time = {training_time:.2f}s, Val accuracy = {val_acc:.4f}")
-    
-    return results
-
-def run_learning_rate_experiment(model, tokenizer, batch_size=64, learning_rates=[0.0001, 0.001, 0.01, 0.1], epochs=2):
-    """Run experiments with different learning rates and measure accuracy"""
-    results = []
-    initial_state = model.state_dict()
-    
-    for lr in tqdm(learning_rates, desc="Learning rate experiments"):
-        print(f"\nRunning experiment with learning_rate={lr}")
-        
-        # Create dataloaders
-        _, train_loader, val_loader, test_loader = create_dataloaders(
-            batch_size=batch_size,
-            model_type='lstm'  # Changed to lstm
-        )
-        
-        # Reset model to initial weights
-        model.load_state_dict(initial_state)
-        
-        # Train model
-        model = train_model(model, train_loader, val_loader, epochs=epochs, lr=lr)
-        
-        # Get final validation accuracy
-        val_acc = evaluate_model(model, val_loader)
-        
-        results.append({
-            'learning_rate': lr,
-            'val_accuracy': val_acc
-        })
-        
-        print(f"Learning rate {lr}: Val accuracy = {val_acc:.4f}")
-    
-    return results
 
 if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = '2'
@@ -161,21 +95,19 @@ if __name__ == "__main__":
     # Create dataloaders and model for initial correctness testing
     tokenizer, train_loader1, val_loader1, test_loader1 = create_dataloaders(
         batch_size=1,
-        model_type='lstm'
     )
     
     tokenizer, train_loader64, val_loader64, test_loader64 = create_dataloaders(
         batch_size=64,
-        model_type='lstm'
     )
     
     # Initialize LSTM model
-    hidden_dim = 100
-    model = LSTM(len(tokenizer.vocab), 100, hidden_dim, 1)
+    hidden_dim = 128
+    model = LSTM(len(tokenizer.vocab), 128, hidden_dim, 1)
     
     # Test model correctness before training
     print("\nTesting model correctness before training:")
-    test_model_correctness(model, num_instances=64, model_type='lstm')
+    test_model_correctness(model, num_instances=64)
     
     # Run batch size experiments
     print("\nRunning batch size experiments...")
@@ -186,10 +118,10 @@ if __name__ == "__main__":
     lr_results = run_learning_rate_experiment(model, tokenizer)
     
     # Save experiment results
-    save_experiment_results(batch_results, lr_results)
+    save_experiment_results(batch_results, lr_results, model_name='lstm')
     
     # Visualize results
-    visualize_results(batch_results, lr_results)
+    visualize_results(batch_results, lr_results, model_name='lstm')
     
     # Train final model with best hyperparameters
     print("\nTraining final model with best hyperparameters...")

@@ -73,7 +73,7 @@ class Tokenizer:
         return len(self.vocab)
 
 
-def create_dataloaders(batch_size, model_type, max_vocab_size=10000):
+def create_dataloaders(batch_size, max_vocab_size=10000):
     # Create generator with fixed seed for reproducibility
     generator = torch.Generator()
     generator.manual_seed(SEED)
@@ -144,6 +144,6 @@ class Accuracy:
 
 
 if __name__ == "__main__":
-    tokenizer, train_loader, val_loader, test_loader = create_dataloaders(batch_size=32, model_type='logistic_regression')
+    tokenizer, train_loader, val_loader, test_loader = create_dataloaders(batch_size=32)
     print(next(iter(train_loader)))
     print(next(iter(test_loader)))
