@@ -74,7 +74,7 @@ def train_model(model, train_loader, val_loader, epochs, lr):
                 loss = criterion(output, batch['label'])
                 val_loss += loss.item()
                 val_acc.update((output > 0).float(), batch['label'])
-        print(f"Epoch {epoch+1} train loss: {train_loss/len(train_loader):.2f}, train acc: {train_acc.compute():.2f}, val loss: {val_loss/len(val_loader):.2f}, val acc: {val_acc.compute():.2f}")
+        print(f"Epoch {epoch} train loss: {train_loss/len(train_loader):.2f}, train acc: {train_acc.compute():.2f}, val loss: {val_loss/len(val_loader):.2f}, val acc: {val_acc.compute():.2f}")
         print()
     
     return model

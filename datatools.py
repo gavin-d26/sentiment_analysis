@@ -117,9 +117,9 @@ def create_dataloaders(batch_size, max_vocab_size=10000):
         torch.save(tokenizer, tokenizer_path)
     
     
-    train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_fn, generator=generator)
-    val_loader = DataLoader(dataset['val'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
-    test_loader = DataLoader(dataset['test'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+    train_loader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True, collate_fn=collate_fn, generator=generator, num_workers=4)
+    val_loader = DataLoader(dataset['val'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=4)
+    test_loader = DataLoader(dataset['test'], batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=4)
     # Return the dataloaders
     return tokenizer, train_loader, val_loader, test_loader
 
