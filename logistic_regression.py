@@ -9,7 +9,8 @@ import random
 import time
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
+import pandas as pd
+from datasets import load_dataset
 # Set random seeds for reproducibility
 SEED = 42
 random.seed(SEED)
@@ -95,7 +96,7 @@ def evaluate_model(model, test_loader):
     return test_acc.compute()
 
 
-def test_model_correctness(model, num_instances=64):
+def test_model_correctness(model, model_name, num_instances=64):
     """Test model correctness by comparing single-instance and minibatch losses"""
     # Create dataloaders for testing
     _, single_loader, _, _ = create_dataloaders(batch_size=1)
@@ -136,12 +137,14 @@ def test_model_correctness(model, num_instances=64):
             if len(batch_losses) >= num_instances:
                 break
     
-    print("\nModel Correctness Test Results:")
-    print(f"Single-instance losses: {single_losses[:5]}")
-    print(f"Minibatch instance losses: {batch_losses[:5]}")
-    print(f"Average single-instance loss: {sum(single_losses)/len(single_losses):.6f}")
-    print(f"Average minibatch loss: {sum(batch_losses)/len(batch_losses):.6f}")
-    print(f"Max absolute difference: {max(abs(s-b) for s,b in zip(single_losses, batch_losses)):.6f}")
+    # Write results to file
+    with open(f'{model_name}_model_correctness_results.txt', 'w') as f:
+        f.write("Model Correctness Test Results:\n")
+        f.write(f"Single-instance losses: {single_losses[:5]}\n")
+        f.write(f"Minibatch instance losses: {batch_losses[:5]}\n")
+        f.write(f"Average single-instance loss: {sum(single_losses)/len(single_losses):.6f}\n")
+        f.write(f"Average minibatch loss: {sum(batch_losses)/len(batch_losses):.6f}\n")
+        f.write(f"Max absolute difference: {max(abs(s-b) for s,b in zip(single_losses, batch_losses)):.6f}\n")
 
 
 def run_batch_size_experiment(model, tokenizer, batch_sizes=[16, 32, 64, 128], epochs=2, lr=0.001):
@@ -304,6 +307,54 @@ def visualize_results(batch_results, lr_results, model_name):
     plt.savefig(f'{model_name}_learning_rate_results.png')
     plt.close()
 
+
+def save_predictions(model, model_name):
+    """Save model predictions for a given data split"""
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    model.eval()
+
+    # Load original dataset to get raw text
+    dataset = load_dataset("stanfordnlp/imdb")
+    _, train_loader, val_loader, test_loader = create_dataloaders(batch_size=64)
+    
+    # compute val predictions
+    val_predictions = []
+    val_labels = []
+    with torch.no_grad():
+        for batch in tqdm(val_loader, desc="Generating validation predictions"):
+            for key in batch:
+                batch[key] = batch[key].to(device)
+            output = model(batch['text'], padding_mask=batch['padding_mask'])
+            pred = (output > 0).float()
+            val_predictions.extend(pred.cpu().numpy().tolist())
+            val_labels.extend(batch['label'].cpu().numpy().tolist())
+    
+    val_texts = val_loader.dataset['original_text']
+    
+    # compute test predictions
+    test_predictions = []
+    test_labels = []
+    with torch.no_grad():
+        for batch in tqdm(test_loader, desc="Generating test predictions"):
+            for key in batch:
+                batch[key] = batch[key].to(device)
+            output = model(batch['text'], padding_mask=batch['padding_mask'])
+            pred = (output > 0).float()
+            test_predictions.extend(pred.cpu().numpy().tolist())
+            test_labels.extend(batch['label'].cpu().numpy().tolist())
+    
+    test_texts = test_loader.dataset['original_text']
+    
+    # write to csv
+    val_df = pd.DataFrame({'text': val_texts, 'prediction': val_predictions, 'true_label': val_labels})
+    val_df.to_csv(f'{model_name}_val_predictions.csv', index=False)
+    
+    test_df = pd.DataFrame({'text': test_texts, 'prediction': test_predictions, 'true_label': test_labels})
+    test_df.to_csv(f'{model_name}_test_predictions.csv', index=False)
+    
+
 if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = '2'
     
@@ -320,7 +371,7 @@ if __name__ == "__main__":
     
     # Test model correctness before training
     print("\nTesting model correctness before training:")
-    test_model_correctness(model, num_instances=64)
+    test_model_correctness(model, 'logistic_regression', num_instances=64)
     
     # Run batch size experiments
     print("\nRunning batch size experiments...")
@@ -336,17 +387,29 @@ if __name__ == "__main__":
     # Visualize results
     visualize_results(batch_results, lr_results, model_name='logistic_regression')
     
+    # Find best hyperparameters
+    best_batch_size = max(batch_results, key=lambda x: x['val_accuracy'])['batch_size']
+    best_lr = max(lr_results, key=lambda x: x['val_accuracy'])['learning_rate']
+    with open('logistic_regression_best_hyperparameters.txt', 'w') as f:
+        f.write(f"Best hyperparameters found:\n")
+        f.write(f"Batch size: {best_batch_size}\n")
+        f.write(f"Learning rate: {best_lr}\n")
+    
+    # Create dataloaders with best batch size
+    _, train_loader_best, val_loader_best, test_loader_best = create_dataloaders(
+        batch_size=best_batch_size
+    )
+    
     # Train final model with best hyperparameters
     print("\nTraining final model with best hyperparameters...")
-    model = train_model(model, train_loader64, val_loader64, epochs=2, lr=0.001)
+    model = train_model(model, train_loader_best, val_loader_best, epochs=2, lr=best_lr)
     
-    # Evaluate on test set
-    test_acc = evaluate_model(model, test_loader64)
-    print(f"\nFinal test accuracy: {test_acc:.4f}")
+    # Save predictions for dev and test sets
+    save_predictions(model, "logistic_regression")
     
     # Analyze model outputs
     print("\nAnalyzing model outputs on validation set...")
-    analyze_model_outputs(model, val_loader64, tokenizer)
+    analyze_model_outputs(model, val_loader_best, tokenizer)
     
     
     

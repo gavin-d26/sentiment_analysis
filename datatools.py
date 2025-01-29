@@ -19,15 +19,17 @@ nlp = spacy.load("en_core_web_sm")
 
 # Preprocess the text using spacy: convert the text to lowercase and tokenize it
 def preprocess_text(text):
-    text['text'] = [[token.text for token in nlp(text['text'][i].lower())] for i in range(len(text['text']))]
-    text['label'] = [int(label) for label in text['label']]
-    return text
+    new_text = {}
+    new_text['original_text'] = [text['text'][i] for i in range(len(text['text']))]
+    new_text['text'] = [[token.text for token in nlp(text['text'][i].lower())] for i in range(len(text['text']))]
+    new_text['label'] = [int(label) for label in text['label']]
+    return new_text
 
 
 # collate function for logistic regression: pad the text with 0s
 def collate_fn(batch):
-    text = [item['text'] for item in batch]
-    label = torch.stack([item['label'] for item in batch], dim=0).float()
+    text = [torch.tensor(item['text'], dtype=torch.int64) for item in batch]
+    label = torch.stack([torch.tensor(item['label']) for item in batch], dim=0).float()
     text = pad_sequence(text, batch_first=True, padding_value=0)
     
     # padding mask
@@ -98,18 +100,25 @@ def create_dataloaders(batch_size, max_vocab_size=10000):
 
         # Preprocess the text using spacy
         dataset = imdb_dataset.map(preprocess_text, batched=True, batch_size=50, num_proc=15)
+        dataset.set_format(columns=['text', 'label', 'original_text'])
+        
+        # create validation set first
+        dataset['train'] = dataset['train'].shuffle(seed=SEED)
+        dataset['val'] = dataset['train'].select(range(7500))
+        dataset['train'] = dataset['train'].select(range(7500, len(dataset['train'])))
         
         # build the vocab
         tokenizer = Tokenizer(dataset['train'], max_vocab_size=max_vocab_size)
         
-        # Encode the dataset
-        dataset = dataset.map(lambda x: {'text': tokenizer.encode_batch(x['text']), 'label': x['label']}, batched=True, batch_size=50, num_proc=15)
-        dataset.set_format(type='torch', columns=['text', 'label'])
+        # Then encode the dataset
+        def encode_dataset(examples):
+            return {
+                'text': tokenizer.encode_batch(examples['text']),
+                'label': examples['label'],
+                'original_text': examples['original_text']
+            }
         
-        # create validation set
-        dataset['train'] = dataset['train'].shuffle(seed=SEED)
-        dataset['val'] = dataset['train'].select(range(7500))
-        dataset['train'] = dataset['train'].select(range(7500, len(dataset['train'])))
+        dataset = dataset.map(encode_dataset, batched=True, batch_size=50, num_proc=15)
         
         # Save processed dataset and tokenizer
         print("Saving preprocessed dataset and tokenizer...")

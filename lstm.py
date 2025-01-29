@@ -17,7 +17,8 @@ from logistic_regression import (
     test_model_correctness,
     analyze_model_outputs,
     save_experiment_results,
-    visualize_results
+    visualize_results,
+    save_predictions
 )
 
 # Set random seeds for reproducibility
@@ -43,46 +44,17 @@ class LSTM(nn.Module):
         # x shape: [batch_size, seq_len]
         embedded = self.embedding(x)  # [batch_size, seq_len, embedding_dim]
         
+        # Run LSTM without packing/sorting
+        output, (hidden, cell) = self.lstm(embedded)
+        
         if padding_mask is not None:
-            # Calculate sequence lengths from padding mask
-            # padding_mask is 1 for padding, 0 for actual tokens
-            lengths = (~padding_mask.bool()).sum(1).cpu()  # [batch_size]
-            
-            # Sort sequences by length for packing
-            lengths, sort_idx = lengths.sort(descending=True)
-            embedded = embedded[sort_idx]
-            
-            # Pack the sequences
-            packed_embedded = pack_padded_sequence(
-                embedded, 
-                lengths,
-                batch_first=True
-            )
-            
-            # Pass through LSTM
-            packed_output, (hidden, cell) = self.lstm(packed_embedded)
-            
-            # Unpack the sequences
-            output, _ = pad_packed_sequence(
-                packed_output,
-                batch_first=True
-            )
-            
-            # Restore original batch order
-            _, unsort_idx = sort_idx.sort()
-            output = output[unsort_idx]
-            
-            # Average pooling considering padding
-            # Create mask for averaging: [batch_size, seq_len, 1]
-            # Invert padding_mask since it's 1 for padding
-            mask = (~padding_mask[unsort_idx].bool()).unsqueeze(-1).float()
-            
+            # Convert padding_mask (1 for padding, 0 for actual tokens)
+            mask = (~padding_mask.bool()).unsqueeze(-1).float()
             # Apply mask and average
             masked_output = output * mask
             avg_pooled = masked_output.sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
         else:
-            # If no padding mask, process as regular sequence
-            output, (hidden, cell) = self.lstm(embedded)
+            # If no padding mask, simple average
             avg_pooled = output.mean(dim=1)
         
         dropped = self.dropout(avg_pooled)
@@ -107,30 +79,42 @@ if __name__ == "__main__":
     
     # Test model correctness before training
     print("\nTesting model correctness before training:")
-    test_model_correctness(model, num_instances=64)
+    test_model_correctness(model, 'lstm', num_instances=64)
     
-    # Run batch size experiments
-    print("\nRunning batch size experiments...")
-    batch_results = run_batch_size_experiment(model, tokenizer)
+    # # Run batch size experiments
+    # print("\nRunning batch size experiments...")
+    # batch_results = run_batch_size_experiment(model, tokenizer)
     
-    # Run learning rate experiments
-    print("\nRunning learning rate experiments...")
-    lr_results = run_learning_rate_experiment(model, tokenizer)
+    # # Run learning rate experiments
+    # print("\nRunning learning rate experiments...")
+    # lr_results = run_learning_rate_experiment(model, tokenizer)
     
-    # Save experiment results
-    save_experiment_results(batch_results, lr_results, model_name='lstm')
+    # # Save experiment results
+    # save_experiment_results(batch_results, lr_results, model_name='lstm')
     
-    # Visualize results
-    visualize_results(batch_results, lr_results, model_name='lstm')
+    # # Visualize results
+    # visualize_results(batch_results, lr_results, model_name='lstm')
     
-    # Train final model with best hyperparameters
-    print("\nTraining final model with best hyperparameters...")
-    model = train_model(model, train_loader64, val_loader64, epochs=2, lr=0.001)
+    # # Find best hyperparameters
+    # best_batch_size = max(batch_results, key=lambda x: x['val_accuracy'])['batch_size']
+    # best_lr = max(lr_results, key=lambda x: x['val_accuracy'])['learning_rate']
+    # with open('lstm_best_hyperparameters.txt', 'w') as f:
+    #     f.write(f"Best hyperparameters found:\n")
+    #     f.write(f"Batch size: {best_batch_size}\n")
+    #     f.write(f"Learning rate: {best_lr}\n")
     
-    # Evaluate on test set
-    test_acc = evaluate_model(model, test_loader64)
-    print(f"\nFinal test accuracy: {test_acc:.4f}")
+    # # Create dataloaders with best batch size
+    # _, train_loader_best, val_loader_best, test_loader_best = create_dataloaders(
+    #     batch_size=best_batch_size
+    # )
     
-    # Analyze model outputs
-    print("\nAnalyzing model outputs on validation set...")
-    analyze_model_outputs(model, val_loader64, tokenizer)
+    # # Train final model with best hyperparameters
+    # print("\nTraining final model with best hyperparameters...")
+    # model = train_model(model, train_loader_best, val_loader_best, epochs=2, lr=best_lr)
+    
+    # # Save predictions for dev and test sets
+    # save_predictions(model, 'lstm')
+    
+    # # Analyze model outputs
+    # print("\nAnalyzing model outputs on validation set...")
+    # analyze_model_outputs(model, val_loader_best, tokenizer)
