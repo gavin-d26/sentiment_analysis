@@ -81,40 +81,49 @@ if __name__ == "__main__":
     print("\nTesting model correctness before training:")
     test_model_correctness(model, 'lstm', num_instances=64)
     
-    # # Run batch size experiments
-    # print("\nRunning batch size experiments...")
-    # batch_results = run_batch_size_experiment(model, tokenizer)
+    # Run batch size experiments
+    print("\nRunning batch size experiments...")
+    batch_results = run_batch_size_experiment(model, tokenizer)
     
-    # # Run learning rate experiments
-    # print("\nRunning learning rate experiments...")
-    # lr_results = run_learning_rate_experiment(model, tokenizer)
+    # Run learning rate experiments
+    print("\nRunning learning rate experiments...")
+    lr_results = run_learning_rate_experiment(model, tokenizer)
     
-    # # Save experiment results
-    # save_experiment_results(batch_results, lr_results, model_name='lstm')
+    # Save experiment results
+    save_experiment_results(batch_results, lr_results, model_name='lstm')
     
-    # # Visualize results
-    # visualize_results(batch_results, lr_results, model_name='lstm')
+    # Visualize results
+    visualize_results(batch_results, lr_results, model_name='lstm')
     
-    # # Find best hyperparameters
-    # best_batch_size = max(batch_results, key=lambda x: x['val_accuracy'])['batch_size']
-    # best_lr = max(lr_results, key=lambda x: x['val_accuracy'])['learning_rate']
-    # with open('lstm_best_hyperparameters.txt', 'w') as f:
-    #     f.write(f"Best hyperparameters found:\n")
-    #     f.write(f"Batch size: {best_batch_size}\n")
-    #     f.write(f"Learning rate: {best_lr}\n")
+    # Find best hyperparameters
+    best_batch_size = max(batch_results, key=lambda x: x['val_accuracy'])['batch_size']
+    best_lr = max(lr_results, key=lambda x: x['val_accuracy'])['learning_rate']
+    with open('lstm_best_hyperparameters.txt', 'w') as f:
+        f.write(f"Best hyperparameters found:\n")
+        f.write(f"Batch size: {best_batch_size}\n")
+        f.write(f"Learning rate: {best_lr}\n")
     
-    # # Create dataloaders with best batch size
-    # _, train_loader_best, val_loader_best, test_loader_best = create_dataloaders(
-    #     batch_size=best_batch_size
-    # )
+    # Create dataloaders with best batch size
+    _, train_loader_best, val_loader_best, test_loader_best = create_dataloaders(
+        batch_size=best_batch_size
+    )
     
-    # # Train final model with best hyperparameters
-    # print("\nTraining final model with best hyperparameters...")
-    # model = train_model(model, train_loader_best, val_loader_best, epochs=2, lr=best_lr)
+    # Train final model with best hyperparameters
+    print("\nTraining final model with best hyperparameters...")
+    model = train_model(model, train_loader_best, val_loader_best, epochs=2, lr=best_lr)
     
-    # # Save predictions for dev and test sets
-    # save_predictions(model, 'lstm')
+    # Evaluate on test set
+    print("\nEvaluating final model on test set...")
+    test_accuracy = evaluate_model(model, test_loader_best)
     
-    # # Analyze model outputs
-    # print("\nAnalyzing model outputs on validation set...")
-    # analyze_model_outputs(model, val_loader_best, tokenizer)
+    # Save test accuracy along with best hyperparameters
+    with open('lstm_best_hyperparameters.txt', 'a') as f:
+        f.write(f"Test accuracy: {test_accuracy:.4f}\n")
+    
+    # Save predictions for dev and test sets
+    save_predictions(model, 'lstm')
+    
+    # Analyze model outputs
+    print("\nAnalyzing model outputs on validation set...")
+    analyze_model_outputs(model, val_loader_best, tokenizer)
+    print(f"Final test set accuracy: {test_accuracy:.4f}")

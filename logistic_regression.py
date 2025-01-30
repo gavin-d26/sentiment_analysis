@@ -404,12 +404,21 @@ if __name__ == "__main__":
     print("\nTraining final model with best hyperparameters...")
     model = train_model(model, train_loader_best, val_loader_best, epochs=2, lr=best_lr)
     
+    # Evaluate on test set
+    print("\nEvaluating final model on test set...")
+    test_accuracy = evaluate_model(model, test_loader_best)
+    
+    # Save test accuracy along with best hyperparameters
+    with open('logistic_regression_best_hyperparameters.txt', 'a') as f:
+        f.write(f"Test accuracy: {test_accuracy:.4f}\n")
+    
     # Save predictions for dev and test sets
     save_predictions(model, "logistic_regression")
     
     # Analyze model outputs
     print("\nAnalyzing model outputs on validation set...")
     analyze_model_outputs(model, val_loader_best, tokenizer)
+    print(f"Final test set accuracy: {test_accuracy:.4f}")
     
     
     
